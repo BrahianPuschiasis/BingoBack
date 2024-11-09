@@ -1,5 +1,9 @@
 package com.Sofka.BingkBack.handler;
 
+import com.Sofka.BingkBack.entity.Card;
+import com.Sofka.BingkBack.interfaces.ICardInterface;
+import com.Sofka.BingkBack.service.CardService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
@@ -12,7 +16,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class WebSocketHandlerImpl extends TextWebSocketHandler {
 
-    // Mapa para almacenar las sesiones WebSocket de los usuarios
     private static final ConcurrentHashMap<String, WebSocketSession> connectedUsers = new ConcurrentHashMap<>();
 
     @Override
@@ -42,14 +45,33 @@ public class WebSocketHandlerImpl extends TextWebSocketHandler {
 
     @Override
     public void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+        String username = (String) session.getAttributes().get("username");
+        String msgPayload = message.getPayload();
+
+        System.out.println("Mensaje recibido del usuario '" + username + "': " + msgPayload);
+
+        if ("crear tarjeta".equals(msgPayload) && username != null) {
+            ICardInterface cardGenerator = new CardService();
+            Card newCard = cardGenerator.generateCard();
+
+            ObjectMapper mapper = new ObjectMapper();
+            String cardJson = mapper.writeValueAsString(newCard);
+
+            System.out.println("Tarjetón generado para " + username + ": " + cardJson);
+
+            session.sendMessage(new TextMessage("Tarjeton:" + cardJson));
+        } else {
+            System.out.println("El mensaje no coincide con 'crear tarjeta' o el usuario es nulo.");
+        }
     }
+
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
         String username = (String) session.getAttributes().get("username");
         if (username != null) {
             connectedUsers.remove(username);
-            broadcastUsersList(); // Notificar a todos los usuarios sobre la lista actualizada
+            broadcastUsersList();
         }
     }
 
