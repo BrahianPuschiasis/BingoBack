@@ -11,15 +11,13 @@ import org.springframework.web.socket.TextMessage;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
 import java.io.IOException;
 import java.util.Random;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 public class WebSocketHandlerImpl extends TextWebSocketHandler {
 
+    private ScheduledFuture<?> gameTask;
     private static final ConcurrentHashMap<String, WebSocketSession> connectedUsers = new ConcurrentHashMap<>();
     private static ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private static List<Integer> drawnNumbers = new ArrayList<>();
@@ -38,6 +36,7 @@ public class WebSocketHandlerImpl extends TextWebSocketHandler {
             session.getAttributes().put("username", username);
             connectedUsers.put(username, session);
             broadcastUsersList();
+            checkGameStatus();  // Revisa el estado del juego cada vez que un usuario se conecta
         } else {
             session.close(CloseStatus.BAD_DATA);
         }
@@ -65,6 +64,47 @@ public class WebSocketHandlerImpl extends TextWebSocketHandler {
         if ("start countdown".equals(msgPayload)) {
             startCountdown();
         }
+
+        // Nuevo caso para cuando un usuario gana el juego
+        if (msgPayload.startsWith("Gano ")) {
+            String winnerUsername = msgPayload.substring(5).trim(); // Extrae el nombre del ganador
+            endGame(winnerUsername);
+        }
+
+        if (msgPayload.startsWith("disconnect")) {
+            // Extrae el nombre de usuario y maneja la desconexión
+            String usernameToDisconnect = msgPayload.substring(11).trim();  // "disconnect username"
+            connectedUsers.remove(usernameToDisconnect);
+            broadcastUsersList();
+            checkGameStatus();
+        }
+
+
+    }
+
+    private void endGame(String winnerUsername) {
+        if (!gameStarted) return;  // Si el juego no ha comenzado, no se hace nada.
+
+        gameStarted = false;  // Finaliza el juego.
+        String endMessage = "Se terminó el juego, ganó " + winnerUsername;
+        broadcastMessage(endMessage);  // Notifica a todos los usuarios que el juego terminó.
+
+        // Resetea el estado del juego.
+        drawnNumbers.clear();
+        currentNumber = -1;
+
+        // Si hay una tarea programada, la cancelamos
+        if (gameTask != null && !gameTask.isCancelled()) {
+            gameTask.cancel(true);
+        }
+
+        // Limpia la lista de usuarios conectados
+        connectedUsers.clear();
+        broadcastUsersList();  // Notifica a los usuarios (si quedan conectados) que la lista de jugadores está vacía.
+
+        // Reinicia el contador para la próxima partida.
+        countdownTime = 0;
+        countdownRunning = false;
     }
 
     @Override
@@ -73,7 +113,7 @@ public class WebSocketHandlerImpl extends TextWebSocketHandler {
         if (username != null) {
             connectedUsers.remove(username);
             broadcastUsersList();
-            checkGameStatus();
+            checkGameStatus();  // Verifica si el juego debe detenerse cuando un usuario se desconecta
         }
     }
 
@@ -108,25 +148,25 @@ public class WebSocketHandlerImpl extends TextWebSocketHandler {
     private void startCountdown() {
         if (countdownRunning) return; // Evita reiniciar si ya está en marcha
 
+        int userCount = connectedUsers.size();
+        if (userCount < 2) {
+            broadcastMessage("No hay suficientes jugadores. Esperando...");
+            return;  // No se inicia la cuenta atrás si no hay suficientes jugadores
+        }
+
         countdownRunning = true;
         countdownTime = 0;
 
         scheduler.scheduleAtFixedRate(() -> {
             countdownTime++;
-
-            int userCount = connectedUsers.size();
             broadcastMessage("Tiempo: " + countdownTime + " segundos");
 
-            if (userCount >= 2 && countdownTime == 30) {
-                countdownRunning = false;
-                startGame(); // Inicia el juego
-            } else if (countdownTime >= 60 && userCount < 2) {
-                countdownRunning = false;
-                countdownTime = 0;
-                broadcastMessage("Reinicio del contador, no hay suficientes jugadores.");
+            if (countdownTime == 30) {
+                startGame(); // Inicia el juego cuando los 30 segundos se completan
             }
         }, 0, 1, TimeUnit.SECONDS);
     }
+
 
     private void startGame() {
         if (gameStarted) return; // Evita iniciar si el juego ya comenzó
@@ -134,7 +174,8 @@ public class WebSocketHandlerImpl extends TextWebSocketHandler {
         gameStarted = true;
         broadcastMessage("¡El juego ha comenzado!");
 
-        scheduler.scheduleAtFixedRate(() -> {
+        // Inicia el proceso de generar números
+        gameTask = scheduler.scheduleAtFixedRate(() -> {
             while (gameStarted && drawnNumbers.size() < 75) {
                 generateAndBroadcastNumber();
                 try {
@@ -156,8 +197,15 @@ public class WebSocketHandlerImpl extends TextWebSocketHandler {
         int randomNumber;
 
         do {
+            // Si el juego ha terminado, salimos inmediatamente del ciclo
+            if (!gameStarted) {
+                System.out.println("El juego ha terminado. No se pueden generar más números.");
+                return;
+            }
+
             randomNumber = random.nextInt(75) + 1;
-        } while (drawnNumbers.contains(randomNumber));
+
+        } while (drawnNumbers.contains(randomNumber));  // Asegura que no se repitan números ya sorteados
 
         drawnNumbers.add(randomNumber);
         currentNumber = randomNumber;
@@ -167,6 +215,7 @@ public class WebSocketHandlerImpl extends TextWebSocketHandler {
         String numberMessage = "Número generado: " + currentNumber;
         broadcastMessage(numberMessage);
     }
+
 
     private void broadcastMessage(String message) {
         for (WebSocketSession session : connectedUsers.values()) {
@@ -181,10 +230,33 @@ public class WebSocketHandlerImpl extends TextWebSocketHandler {
     }
 
     private void checkGameStatus() {
+        // Si ya hay un ganador, no necesitas buscar más jugadores ni reiniciar la partida.
+        if (gameStarted && drawnNumbers.size() < 75) {
+            return;  // El juego continúa normalmente.
+        }
+
+        // Si el número de jugadores es menor a 2 y el juego no ha comenzado, reiniciar.
         if (connectedUsers.size() < 2) {
             gameStarted = false;
             drawnNumbers.clear();
             currentNumber = -1;
+
+            // Si hay una tarea programada, la cancelamos
+            if (gameTask != null && !gameTask.isCancelled()) {
+                gameTask.cancel(true);
+            }
+
+            broadcastMessage("No hay suficientes jugadores para comenzar. El juego está detenido.");
+        }
+
+        // Si no hay jugadores en la sala, reinicia el contador y números.
+        if (connectedUsers.size() == 0) {
+            gameStarted = false;  // Detiene el juego
+            drawnNumbers.clear();  // Limpia los números generados
+            currentNumber = -1;    // Resetea el número actual
+            countdownTime = 0;     // Reinicia el contador
+            countdownRunning = false; // Detiene cualquier cuenta regresiva
+            broadcastMessage("No hay jugadores, el juego está detenido.");
         }
     }
 }
