@@ -7,7 +7,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.util.List;
 
 @Entity
 @AllArgsConstructor
@@ -16,15 +15,12 @@ import java.util.List;
 @Setter
 public class Game {
 
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String ganador;  // Nombre del usuario ganador
-
-    @OneToMany(mappedBy = "game", cascade = CascadeType.ALL)
-    private List<PlayerGame> playerGames;  // Relación con los jugadores en el juego
-
+    private String ganador;
 
 
 }

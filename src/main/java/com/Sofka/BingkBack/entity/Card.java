@@ -1,27 +1,33 @@
 package com.Sofka.BingkBack.entity;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.util.List;
 
-@Entity
+@NoArgsConstructor
 @Getter
 @Setter
 public class Card {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-    private List<Integer> columnB;
-    private List<Integer> columnI;
-    private List<Integer> columnN;
-    private List<Integer> columnG;
-    private List<Integer> columnO;
 
+
+    @ElementCollection
+    private List<Integer> columnB;
+
+    @ElementCollection
+    private List<Integer> columnI;
+
+    @ElementCollection
+    private List<Integer> columnN;
+
+    @ElementCollection
+    private List<Integer> columnG;
+
+    @ElementCollection
+    private List<Integer> columnO;
 
     public Card(List<Integer> columnB, List<Integer> columnI, List<Integer> columnN, List<Integer> columnG, List<Integer> columnO) {
         this.columnB = columnB;
@@ -31,3 +37,4 @@ public class Card {
         this.columnO = columnO;
     }
 }
+

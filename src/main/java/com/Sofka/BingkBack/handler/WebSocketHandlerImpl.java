@@ -1,9 +1,13 @@
 package com.Sofka.BingkBack.handler;
 
 import com.Sofka.BingkBack.entity.Card;
+import com.Sofka.BingkBack.entity.Game;
 import com.Sofka.BingkBack.interfaces.ICardInterface;
 import com.Sofka.BingkBack.service.CardService;
+import com.Sofka.BingkBack.service.GameService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
@@ -14,7 +18,6 @@ import java.util.List;
 import java.util.concurrent.*;
 import java.io.IOException;
 import java.util.Random;
-
 public class WebSocketHandlerImpl extends TextWebSocketHandler {
 
     private ScheduledFuture<?> gameTask;
@@ -26,6 +29,12 @@ public class WebSocketHandlerImpl extends TextWebSocketHandler {
     private static int countdownTime = 0;
     private static int currentNumber = -1;
     private static Random random = new Random();
+
+
+
+    @Autowired
+    private GameService gameService;
+
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
@@ -58,7 +67,7 @@ public class WebSocketHandlerImpl extends TextWebSocketHandler {
         }
 
         if ("iniciar juego".equals(msgPayload)) {
-            startGame();
+
         }
 
         if ("start countdown".equals(msgPayload)) {
@@ -167,12 +176,22 @@ public class WebSocketHandlerImpl extends TextWebSocketHandler {
         }, 0, 1, TimeUnit.SECONDS);
     }
 
-
     private void startGame() {
         if (gameStarted) return; // Evita iniciar si el juego ya comenzó
 
         gameStarted = true;
         broadcastMessage("¡El juego ha comenzado!");
+
+        // Asignar el primer usuario como "host"
+        String firstUser = connectedUsers.keySet().iterator().next(); // Obtiene el primer usuario
+        WebSocketSession firstUserSession = connectedUsers.get(firstUser); // Obtiene la sesión del primer usuario
+
+        // Envía un mensaje de "host" al primer usuario
+        try {
+            sendHostMessage(firstUserSession);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
         // Inicia el proceso de generar números
         gameTask = scheduler.scheduleAtFixedRate(() -> {
@@ -191,6 +210,12 @@ public class WebSocketHandlerImpl extends TextWebSocketHandler {
                 gameStarted = false; // Finaliza el juego
             }
         }, 0, 5, TimeUnit.SECONDS);
+    }
+
+    private void sendHostMessage(WebSocketSession session) throws IOException {
+        String message = "¡Eres el host! Eres responsable de crear la sala.";
+        session.sendMessage(new TextMessage(message));
+
     }
 
     private void generateAndBroadcastNumber() {
