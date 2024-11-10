@@ -1,0 +1,14 @@
+# Usa la imagen oficial de Keycloak con la versión 21.0.1
+FROM quay.io/keycloak/keycloak:21.0.1
+
+# Exponer el puerto en el que Keycloak estará escuchando
+EXPOSE 8080
+
+
+# Configurar usuario admin para Keycloak
+ENV KEYCLOAK_ADMIN=admin
+ENV KEYCLOAK_ADMIN_PASSWORD=admin
+
+# Configurar Keycloak en modo de servidor de autenticación
+# Puedes añadir otros entornos o configuraciones según sea necesario
+CMD ["start-dev"]

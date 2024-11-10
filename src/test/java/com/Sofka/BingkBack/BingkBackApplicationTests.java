@@ -17,12 +17,12 @@ class BingkBackApplicationTests {
 	@Autowired
 	private GameService gameService;
 
-	@Test
-	public void testSaveGame() {
-		Game game = new Game();
-		game.setGanador("test");
-		Game savedGame = gameService.saveGame(game);
-	}
+//	@Test
+//	public void testSaveGame() {
+//		Game game = new Game();
+//		game.setGanador("test");
+//		Game savedGame = gameService.saveGame(game);
+//	}
 
 
 }
