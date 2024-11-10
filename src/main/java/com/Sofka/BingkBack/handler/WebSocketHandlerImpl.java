@@ -13,16 +13,19 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.io.IOException;
-import java.util.*;
-import java.util.concurrent.*;
-
 import java.util.Random;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
 public class WebSocketHandlerImpl extends TextWebSocketHandler {
 
     private static final ConcurrentHashMap<String, WebSocketSession> connectedUsers = new ConcurrentHashMap<>();
     private static ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private static List<Integer> drawnNumbers = new ArrayList<>();
     private static boolean gameStarted = false;
+    private static boolean countdownRunning = false;
+    private static int countdownTime = 0;
     private static int currentNumber = -1;
     private static Random random = new Random();
 
@@ -57,6 +60,10 @@ public class WebSocketHandlerImpl extends TextWebSocketHandler {
 
         if ("iniciar juego".equals(msgPayload)) {
             startGame();
+        }
+
+        if ("start countdown".equals(msgPayload)) {
+            startCountdown();
         }
     }
 
@@ -98,10 +105,31 @@ public class WebSocketHandlerImpl extends TextWebSocketHandler {
         }
     }
 
+    private void startCountdown() {
+        if (countdownRunning) return; // Evita reiniciar si ya está en marcha
+
+        countdownRunning = true;
+        countdownTime = 0;
+
+        scheduler.scheduleAtFixedRate(() -> {
+            countdownTime++;
+
+            int userCount = connectedUsers.size();
+            broadcastMessage("Tiempo: " + countdownTime + " segundos");
+
+            if (userCount >= 2 && countdownTime == 30) {
+                countdownRunning = false;
+                startGame(); // Inicia el juego
+            } else if (countdownTime >= 60 && userCount < 2) {
+                countdownRunning = false;
+                countdownTime = 0;
+                broadcastMessage("Reinicio del contador, no hay suficientes jugadores.");
+            }
+        }, 0, 1, TimeUnit.SECONDS);
+    }
+
     private void startGame() {
-        if (gameStarted) {
-            return;
-        }
+        if (gameStarted) return; // Evita iniciar si el juego ya comenzó
 
         gameStarted = true;
         broadcastMessage("¡El juego ha comenzado!");
@@ -119,6 +147,7 @@ public class WebSocketHandlerImpl extends TextWebSocketHandler {
 
             if (drawnNumbers.size() == 75) {
                 broadcastMessage("¡El juego ha terminado! Todos los números han sido generados.");
+                gameStarted = false; // Finaliza el juego
             }
         }, 0, 5, TimeUnit.SECONDS);
     }
@@ -134,7 +163,6 @@ public class WebSocketHandlerImpl extends TextWebSocketHandler {
         currentNumber = randomNumber;
 
         System.out.println("Número generado: " + currentNumber);
-
 
         String numberMessage = "Número generado: " + currentNumber;
         broadcastMessage(numberMessage);
