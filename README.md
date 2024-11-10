@@ -10,7 +10,7 @@ Este es un proyecto de Bingo en tiempo real desarrollado con **Java** y **Spring
 
 ## Requisitos Previos
 
-- **Java** 17+
+- **Java** 19+
 - **Docker** (para levantar el contenedor de Keycloak)
 - **Maven** (para la gestión de dependencias)
 - **DockerFile** (correr el DockerFile para instalar Keycloak, posteriormente importar el reino, ambos archivos estan dentro de la carpeta "KeyCloak")
